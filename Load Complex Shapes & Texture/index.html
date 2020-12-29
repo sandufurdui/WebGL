@@ -1,0 +1,308 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+    <title>WebGL</title>
+    <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Swiper/3.3.1/css/swiper.min.css">
+    <link rel="stylesheet" href="assets/css/Simple-Slider.css">
+    <link rel="stylesheet" href="assets/css/styles.css">
+
+    <script id="vertex-shader" type="x-shader/x-vertex">
+
+        attribute vec4 vPosition;
+        attribute vec2 vTextureCoord;
+
+        varying vec2 fTextureCoord;
+        attribute vec4 vNormal;
+        attribute vec4 vColor;
+        varying vec4 fragColor;
+        uniform vec3 theta;
+        uniform float coeff;
+        uniform vec3 trCoeff;
+
+        uniform vec4 ambientProduct;
+        uniform vec4 diffuseProduct0, specularProduct0;
+        uniform vec4 diffuseProduct1, specularProduct1;
+        uniform vec4 diffuseProduct2, specularProduct2;
+
+        uniform vec4 lightPosition0;
+        uniform vec4 lightPosition1;
+        uniform vec4 lightPosition2;
+
+        uniform float shininess;
+        uniform mat4 modelView;
+        uniform mat4 projection;
+
+        void main()
+        {
+            vec3 angles = radians(theta);
+            vec3 c = cos( angles );
+            vec3 s = sin( angles );
+
+            mat4 rx = mat4( 1.0,  0.0,  0.0, 0.0,
+                    0.0,  c.x,  s.x, 0.0,
+                    0.0, -s.x,  c.x, 0.0,
+                    0.0,  0.0,  0.0, 1.0 );
+
+            mat4 ry = mat4( c.y, 0.0, -s.y, 0.0,
+                    0.0, 1.0,  0.0, 0.0,
+                    s.y, 0.0,  c.y, 0.0,
+                    0.0, 0.0,  0.0, 1.0 );
+
+            mat4 rz = mat4( c.z, s.z, 0.0, 0.0,
+                    -s.z,  c.z, 0.0, 0.0,
+                    0.0,  0.0, 1.0, 0.0,
+                    0.0,  0.0, 0.0, 1.0 );
+
+            mat4 sc = mat4(
+                coeff, 0, 0, 0,
+                0, coeff, 0, 0,
+                0, 0, coeff, 0,
+                0, 0, 0, 1
+              );
+
+            mat4 tr = mat4(
+              1, 0, 0, 0,
+              0, 1, 0, 0,
+              0, 0, 1, 0,
+              trCoeff.x, trCoeff.y, trCoeff.z, 1
+          );
+
+          vec3 vertexPos = vPosition.xyz;
+
+          vec3 lightPos0 = lightPosition0.xyz;
+          vec3 lightPos1 = lightPosition1.xyz;
+          vec3 lightPos2 = lightPosition2.xyz;
+
+          vec3 lightVector0 = normalize(lightPos0 - vertexPos);
+          vec3 lightVector1 = normalize(lightPos1 - vertexPos);
+          vec3 lightVector2 = normalize(lightPos2 - vertexPos);
+
+          vec3 normalVector = normalize((projection * modelView * tr * rz * ry * rx * sc * vNormal).xyz);
+
+
+          float distance0 = length(lightPos0 - vertexPos);
+          float distance1 = length(lightPos1 - vertexPos);
+          float distance2 = length(lightPos2 - vertexPos);
+
+          float diffuseValue0 = max(dot(lightVector0, normalVector), 0.0) / distance0;
+          float diffuseValue1 = max(dot(lightVector1, normalVector), 0.0) / distance1;
+          float diffuseValue2 = max(dot(lightVector2, normalVector), 0.0) / distance2;
+
+
+          float specularValue0 = pow(max(dot(lightVector0, normalVector), 0.0), shininess);
+          float specularValue1 = pow(max(dot(lightVector1, normalVector), 0.0), shininess);
+          float specularValue2 = pow(max(dot(lightVector2, normalVector), 0.0), shininess);
+
+            gl_Position = projection * modelView * tr * rz * ry * rx * sc * vPosition;
+            fragColor = diffuseProduct0 * diffuseValue0 + diffuseProduct1 * diffuseValue1 + diffuseProduct2 * diffuseValue2 +
+                        specularValue0 * specularProduct0 + specularValue1 * specularProduct1 + specularValue2 * specularProduct2
+                        + ambientProduct;
+            fTextureCoord = vTextureCoord;
+
+        }
+    </script>
+    <style>.none {display: none;}</style>
+    <script id="fragment-shader" type="x-shader/x-fragment">
+        precision mediump float;
+        varying vec4 fragColor;
+        uniform sampler2D textureData;
+        varying vec2 fTextureCoord;
+
+        void
+        main()
+        {
+
+                        vec4 colorFromTexture = texture2D(textureData, fTextureCoord);
+
+                        gl_FragColor = colorFromTexture * 0.8 + fragColor * 0.2;
+
+        }
+    </script>
+    <script type="text/javascript" src="Common/webgl-utils.js"></script>
+    <script type="text/javascript" src="Common/initShaders.js"></script>
+    <script type="text/javascript" src="Common/MV.js"></script>
+    <script type="text/javascript" src="Common/lab4.js"></script>
+
+</head>
+
+<body>
+    <div>
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <canvas id="gl-canvas" width="500" height=" 500">
+                        Oops ... your browser doesn't support the HTML5 canvas element
+                    </canvas><form>
+                        <select id="mySelect" onclick="updateSelectedShape()">
+                            <option value="" selected data-default>select your shape</option>
+
+                        </select>
+                    </form>
+                    <div><button id="deleteFigure">Delete selected figure</button></div>
+                </div>
+                <div class="col-md-6">
+                    <div>
+                        <div>
+                            <div class="d-md-flex justify-content-md-center align-items-md-center" style="font-size: larger;color: white;border-color: red;border-width: 20px;background-color: rgb(109,96,96);margin-top: 30px;">
+                                <p>Add Shape</p>
+                            </div>
+                            <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-top: 28px;">
+                                <div class="d-md-flex align-items-md-center">
+                                    <button id="addCube" class="button">Cube</button>
+                                </div>
+                                <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-left: 21px;">
+                                    <button id="addCone" class="button">Cone</button>
+                                </div>
+                                <div class="d-md-flex align-items-md-center" style="margin-left: 21px;">
+                                    <button id="addPyramid" class="button">Pyramid</button>
+                                </div>
+                                
+                            </div>
+                        </div>
+                        <div>
+                            <div class="d-md-flex justify-content-md-center align-items-md-center" style="font-size: larger;color: white;border-color: red;border-width: 20px;background-color: rgb(109,96,96);margin-top: 30px;">
+                                <p>Movement</p>
+                            </div>
+                            <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-top: 28px;">
+                                <div class="d-md-flex align-items-md-center">
+                                    Y
+                                    <input type="range" min="-1.5" max="2" value="0" step="0.01" id="UpDown">
+                                </div>
+                                <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-left: 21px;">
+                                    X
+                                    <input type="range" min="-2" max="4" value="0" step="0.01" id="LeftRight">
+                                </div>
+                                <div class="d-md-flex align-items-md-center" style="margin-left: 21px;">
+                                    Z
+                                    <input type="range" min="-1.5" max="4" value="0" step="0.01" id="CloserFurther">
+                                </div>
+                            </div>
+                            <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-top: 28px;">
+                                <div class="d-md-flex align-items-md-center">
+
+                                    <button id="xButton">Rotate X</button>
+                                </div>
+                                <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-left: 21px;">
+                                    <button id="yButton">Rotate Y</button>
+                                </div>
+                                <div class="d-md-flex align-items-md-center" style="margin-left: 21px;">
+                                    <button id="zButton">Rotate Z</button>
+                                </div>
+                                <div class="d-md-flex align-items-md-center" style="margin-left: 21px;">
+                                    <button id="stopButton">Stop Rotation</button>
+                                </div>
+                            </div>
+                        </div>
+
+
+
+
+
+
+
+
+                        <div>
+                            <div class="d-md-flex justify-content-md-center align-items-md-center" style="font-size: larger;color: white;border-color: red;border-width: 20px;background-color: rgb(109,96,96);margin-top: 30px;">
+                                <p>Scale</p>
+                            </div>
+                            <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-top: 28px;">
+                                <div class="d-md-flex align-items-md-center" style="margin-left: 21px;"><input type="range" min="0" max="10" value="1" step="0.01" id="Scale"></div>
+                            </div>
+                        </div>
+
+
+
+                        <div>
+                            <div class="d-md-flex justify-content-md-center align-items-md-center" style="font-size: larger;color: white;border-color: red;border-width: 20px;background-color: rgb(109,96,96);margin-top: 30px;">
+                                <p>View</p>
+                            </div>
+                            <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-top: 28px;">
+                                <div class="d-md-flex align-items-md-center">
+                                    Theta
+                                    <input id="thetaSlider" type="range" min="-90" max="90" step="0.1" value="0" />
+                                </div>
+                                <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-left: 21px;">
+                                    Phi
+                                    <input id="phiSlider" type="range" min="-90" max="90" step="0.1" value="0" />
+                                </div>
+                                <div class="d-md-flex align-items-md-center" style="margin-left: 21px;">
+
+                                    Fov
+                                    <input id="fovSlider" type="range" min="10" max="120" step="0.1" value="45.0" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div>
+        <div class="d-md-flex justify-content-md-center align-items-md-center" style="font-size: larger;color: white;border-color: red;border-width: 20px;background-color: rgb(109,96,96);margin-top: 30px;">
+            <p>Light &amp; Light Sources</p>
+        </div>
+        <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-top: 28px;">
+            <div class="d-md-flex align-items-md-center">
+                Theta
+                <input id="thetaSlider" type="range" min="-90" max="90" step="0.1" value="0" />
+            </div>
+            <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-left: 21px;">
+                Phi
+                <input id="phiSlider" type="range" min="-90" max="90" step="0.1" value="0" />
+            </div>
+            <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-left: 21px;">
+                Fov
+                <input id="fovSlider" type="range" min="10" max="120" step="0.1" value="45.0" />
+            </div>
+            <div class="d-md-flex align-items-md-center" style="margin-left: 21px;">
+                Ambient
+                <input id="ambient" type="color" name="favcolor" value="#333333">
+            </div>
+            <div class="d-md-flex align-items-md-center" style="margin-left: 21px;">
+                Specular
+                <input id="specular" type="color" name="favcolor" value="#ff0000">
+            </div>
+            <div class="d-md-flex align-items-md-center" style="margin-left: 21px;">
+                Diffuse
+                <input id="diffuse" type="color" name="favcolor" value="#000000">
+            </div><div class="none">
+                <button id="IncreaseZ">Increase Z</button><button id="DecreaseZ">Decrease Z</button><button id="IncreaseR">Increase R</button>
+                <button id="DecreaseR">Decrease R</button><input id="aspectSlider" type="range" min="0.5" max="2" step="0.1" value="1" /><input id="atSliderX" type="range" min="-2" max="2" step="0.1" value="0" />
+                <input id="atSliderY" type="range" min="-2" max="2" step="0.1" value="0" /><input id="atSliderZ" type="range" min="-2" max="2" step="0.1" value="0" /><input id="lightX" type="range" min="-100" max="40" step="1" value="0" />
+                <input id="lightY" type="range" min="-30" max="30" step="1" value="0" /><input id="lightZ" type="range" min="-10" max="30" step="1" value="0" /><input id="ambientMaterial" type="color" name="favcolor" value="#ff0000">
+                <input id="specularMaterial" type="color" name="favcolor" value="#ff0000"><input id="diffuseMaterial" type="color" name="favcolor" value="#ff0000"><input id="shininess" type="range" min="0" max="20" step="0.1" value="0" />
+                </div><div>
+                    <div class="d-md-flex align-items-md-center" style="margin-left: 21px;">
+                        Shiness
+                        <input id="shininess" type="range" min="0" max="20" step="0.1" value="0" />
+                    </div>
+                </div>
+            </div>
+            <div class="d-md-flex justify-content-md-center" style="margin-top: 32px;">
+                <br><select id="SelectedLight">
+                    <option value="0">First Light Source</option>
+                    <option value="1">Second Light Source</option>
+                    <option value="2" selected>Third Light Source</option>
+                </select>
+            </div>
+            <div>
+                <div class="d-md-flex justify-content-md-center align-items-md-center" style="font-size: larger;color: white;border-color: red;border-width: 20px;background-color: rgb(109,96,96);margin-top: 30px;">
+                    <p>Textures &amp; Input</p>
+                </div>
+                <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-left: 21px;margin-top: 29px;">
+                    Texture
+                    <input type="file" class="texture" style="font-size: 15px;" />
+                </div>
+                <div class="d-md-flex justify-content-md-center align-items-md-center" style="margin-top: 28px;margin-bottom: 60px;">
+                    <div class="d-md-flex align-items-md-center">
+                        Load OBJ <br>
+                        <input type="file" id="file-input" style="font-size: 15px; " class="button1 <br>" /><button id="load">Load obj</button>
+                    </div>
+                </div>
+            </div>
+
+</body>
+</html>

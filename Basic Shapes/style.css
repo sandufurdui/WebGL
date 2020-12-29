@@ -1,0 +1,13 @@
+.none{
+	display: none;
+}
+.editor{
+	display:inline-block;
+}
+div.editor{
+	width: 50vw;
+}
+.title1 {
+	text-align: center;
+	color:red;
+}
